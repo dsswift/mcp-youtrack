@@ -121,6 +121,7 @@ Add to your MCP client configuration:
 |------|-------------|
 | `add_comment` | Add a comment to an issue |
 | `list_comments` | Get all comments on an issue |
+| `delete_comment` | Delete a comment from an issue |
 
 ### Issue Linking
 
@@ -130,6 +131,8 @@ Add to your MCP client configuration:
 | `list_issue_links` | Get all links for an issue |
 | `add_issue_link` | Create a link between two issues |
 | `remove_issue_link` | Remove a link between issues |
+
+For detailed API documentation with all parameters and examples, see [docs/api-reference.md](docs/api-reference.md).
 
 ## Usage Examples
 
