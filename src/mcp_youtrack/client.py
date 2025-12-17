@@ -419,6 +419,27 @@ class YouTrackClient:
         data = response.json()
         return [Comment.model_validate(item) for item in data]
 
+    async def delete_comment(self, issue_id: str, comment_id: str) -> bool:
+        """Delete a comment from an issue.
+
+        Args:
+            issue_id: Issue ID the comment belongs to.
+            comment_id: Comment ID to delete.
+
+        Returns:
+            True if deleted successfully.
+
+        Raises:
+            YouTrackNotFoundError: If the issue or comment doesn't exist.
+        """
+        logger.debug("Deleting comment %s from issue %s", comment_id, issue_id)
+        response = await self.client.delete(f"/issues/{issue_id}/comments/{comment_id}")
+
+        if not response.is_success:
+            self._handle_error(response)
+
+        return True
+
     async def list_link_types(self) -> list[IssueLinkType]:
         """Get all available issue link types.
 

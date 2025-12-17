@@ -502,6 +502,41 @@ async def list_comments(issue_id: str) -> str:
 
 
 @mcp.tool()
+async def delete_comment(issue_id: str, comment_id: str) -> str:
+    """Delete a comment from an issue.
+
+    WARNING: This operation cannot be undone. The comment will be permanently deleted.
+
+    Args:
+        issue_id: The issue ID the comment belongs to (e.g., 'OPS-123').
+        comment_id: The comment ID to delete.
+
+    Returns:
+        JSON object confirming deletion or error message.
+    """
+    ctx = mcp.get_context()
+    client: YouTrackClient = ctx.request_context.lifespan_context["client"]
+
+    try:
+        await client.delete_comment(issue_id, comment_id)
+
+        return json.dumps(
+            {
+                "deleted": True,
+                "issue_id": issue_id,
+                "comment_id": comment_id,
+                "message": f"Comment {comment_id} has been permanently deleted from issue {issue_id}",
+            },
+            indent=2,
+        )
+
+    except YouTrackNotFoundError:
+        return json.dumps({"error": f"Issue '{issue_id}' or comment '{comment_id}' not found"})
+    except YouTrackError as e:
+        return json.dumps({"error": str(e)})
+
+
+@mcp.tool()
 async def list_link_types() -> str:
     """Get available issue link types.
 

@@ -267,6 +267,40 @@ class TestYouTrackClient:
         assert len(comments) == 1
         assert comments[0].text == "This is a test comment"
 
+    async def test_delete_comment(
+        self,
+        client: YouTrackClient,
+        httpx_mock: HTTPXMock,
+    ) -> None:
+        """Test deleting a comment."""
+        httpx_mock.add_response(
+            url=re.compile(r".*/api/issues/TEST-123/comments/1-1"),
+            method="DELETE",
+            status_code=200,
+        )
+
+        async with client:
+            result = await client.delete_comment("TEST-123", "1-1")
+
+        assert result is True
+
+    async def test_delete_comment_not_found(
+        self,
+        client: YouTrackClient,
+        httpx_mock: HTTPXMock,
+    ) -> None:
+        """Test 404 error when deleting a non-existent comment."""
+        httpx_mock.add_response(
+            url=re.compile(r".*/api/issues/TEST-123/comments/invalid-id"),
+            method="DELETE",
+            status_code=404,
+            json={"error": "Comment not found"},
+        )
+
+        async with client:
+            with pytest.raises(YouTrackNotFoundError):
+                await client.delete_comment("TEST-123", "invalid-id")
+
     async def test_auth_error(
         self,
         client: YouTrackClient,

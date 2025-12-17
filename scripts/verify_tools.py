@@ -61,6 +61,7 @@ from mcp_youtrack.server import (
     add_comment,
     add_issue_link,
     create_issue,
+    delete_comment,
     delete_issue,
     get_issue,
     get_project_fields,
@@ -213,19 +214,40 @@ class ToolVerifier:
         except Exception as e:
             self.record("add_comment", False, str(e))
 
-    async def verify_list_comments(self, issue_id: str) -> None:
-        """Test list_comments tool."""
+    async def verify_list_comments(self, issue_id: str) -> str | None:
+        """Test list_comments tool. Returns comment ID if found."""
         try:
             result = await list_comments(issue_id)
             data = json.loads(result)
             if "error" in data:
                 self.record("list_comments", False, data["error"])
+                return None
             elif "comments" in data:
                 self.record("list_comments", True, f"Found {data['count']} comments")
+                # Return first comment ID for delete test
+                if data["comments"]:
+                    return data["comments"][0].get("id")
+                return None
             else:
                 self.record("list_comments", False, "No comments array")
+                return None
         except Exception as e:
             self.record("list_comments", False, str(e))
+            return None
+
+    async def verify_delete_comment(self, issue_id: str, comment_id: str) -> None:
+        """Test delete_comment tool."""
+        try:
+            result = await delete_comment(issue_id, comment_id)
+            data = json.loads(result)
+            if "error" in data:
+                self.record("delete_comment", False, data["error"])
+            elif data.get("deleted"):
+                self.record("delete_comment", True, f"Deleted comment {comment_id}")
+            else:
+                self.record("delete_comment", False, "Delete flag not set")
+        except Exception as e:
+            self.record("delete_comment", False, str(e))
 
     async def verify_list_link_types(self) -> None:
         """Test list_link_types tool."""
@@ -340,7 +362,9 @@ class ToolVerifier:
                     await self.verify_get_issue(issue1)
                     await self.verify_update_issue(issue1)
                     await self.verify_add_comment(issue1)
-                    await self.verify_list_comments(issue1)
+                    comment_id = await self.verify_list_comments(issue1)
+                    if comment_id:
+                        await self.verify_delete_comment(issue1, comment_id)
 
                 if issue1 and issue2:
                     await self.verify_issue_links(issue1, issue2)
