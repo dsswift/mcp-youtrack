@@ -88,6 +88,7 @@ Create a new issue in YouTrack.
 | `summary` | string | Yes | Issue title/summary |
 | `description` | string | No | Detailed description (supports markdown) |
 | `project` | string | No | Project short name. Uses `YOUTRACK_DEFAULT_PROJECT` if not specified |
+| `type` | string | No | Type name (e.g., 'Bug', 'Task', 'Feature') |
 
 **Returns:** JSON object with created issue details and `_created: true` flag.
 
@@ -97,11 +98,19 @@ Create a new issue in YouTrack.
 # Minimal issue
 create_issue(summary="Fix login timeout")
 
-# With description
+# With description and type
 create_issue(
     project="OPS",
     summary="Add dark mode support",
-    description="## Requirements\n- Toggle in settings\n- Persist preference"
+    description="## Requirements\n- Toggle in settings\n- Persist preference",
+    type="Feature"
+)
+
+# Create a bug report
+create_issue(
+    project="OPS",
+    summary="Login timeout after 5 minutes",
+    type="Bug"
 )
 ```
 
@@ -126,6 +135,7 @@ Update an existing issue's fields.
 | `state` | string | No | New state (e.g., 'Open', 'In Progress', 'Done') |
 | `assignee` | string | No | Assignee login name |
 | `domain` | string | No | Domain name |
+| `type` | string | No | Type name (e.g., 'Bug', 'Task', 'Feature') |
 
 **Returns:** JSON object with updated issue details and `_updated: true` flag.
 
@@ -142,11 +152,14 @@ update_issue(
     state="Done",
     assignee="jsmith"
 )
+
+# Change issue type
+update_issue(issue_id="OPS-123", type="Bug")
 ```
 
 **Implementation Notes:**
 
-- State, assignee, and domain changes use YouTrack command API
+- State, assignee, domain, and type changes use YouTrack command API
 - Summary and description use direct field updates
 - Both can be combined in a single call
 
