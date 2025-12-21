@@ -219,6 +219,7 @@ async def create_issue(
     summary: str,
     description: str | None = None,
     project: str | None = None,
+    type: str | None = None,
 ) -> str:
     """Create a new issue in YouTrack.
 
@@ -226,6 +227,7 @@ async def create_issue(
         summary: Issue title/summary (required).
         description: Detailed description of the issue (optional, supports markdown).
         project: Project short name (e.g., 'OPS'). Uses YOUTRACK_DEFAULT_PROJECT if not specified.
+        type: Type name (e.g., 'Bug', 'Task', 'Feature') (optional).
 
     Returns:
         JSON object with the created issue details including the new issue ID.
@@ -251,6 +253,14 @@ async def create_issue(
             description=description,
         )
 
+        # Set type via command if provided
+        if type:
+            if not issue.id_readable:
+                return json.dumps({"error": "Created issue missing id_readable field"})
+            await client.execute_command(issue.id_readable, f"Type: {type}")
+            # Fetch the updated issue to get the type field
+            issue = await client.get_issue(issue.id_readable)
+
         result = format_issue(issue)
         result["_created"] = True
 
@@ -270,6 +280,7 @@ async def update_issue(
     state: str | None = None,
     assignee: str | None = None,
     domain: str | None = None,
+    type: str | None = None,
 ) -> str:
     """Update an existing issue in YouTrack.
 
@@ -280,6 +291,7 @@ async def update_issue(
         state: New state name (e.g., 'Open', 'In Progress', 'Done') (optional).
         assignee: Assignee login name (optional).
         domain: Domain name (e.g., 'Administrative', 'Security') (optional).
+        type: Type name (e.g., 'Bug', 'Task', 'Feature') (optional).
 
     Returns:
         JSON object with the updated issue details.
@@ -288,8 +300,8 @@ async def update_issue(
     client: YouTrackClient = ctx.request_context.lifespan_context["client"]
 
     try:
-        # Handle state, assignee, and domain via commands
-        if state or assignee or domain:
+        # Handle state, assignee, domain, and type via commands
+        if state or assignee or domain or type:
             commands: list[str] = []
             if state:
                 commands.append(f"State: {state}")
@@ -297,6 +309,8 @@ async def update_issue(
                 commands.append(f"Assignee: {assignee}")
             if domain:
                 commands.append(f"Domain: {domain}")
+            if type:
+                commands.append(f"Type: {type}")
 
             await client.execute_command(issue_id, " ".join(commands))
 
