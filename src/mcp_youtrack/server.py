@@ -1,4 +1,4 @@
-"""YouTrack MCP Server with FastMCP tools."""
+"""YouTrack MCP server: the tools, served over stdio by the MCP SDK's MCPServer."""
 
 from __future__ import annotations
 
@@ -7,12 +7,13 @@ import logging
 import sys
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import Context, MCPServer
 
 from .client import YouTrackClient, YouTrackError, YouTrackNotFoundError
-from .config import load_config
+from .config import YouTrackConfig, load_config
 
 # Configure logging to stderr (stdout is reserved for MCP protocol)
 logging.basicConfig(
@@ -23,20 +24,27 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class AppState:
+    """Resources shared by every tool call for the life of the server."""
+
+    client: YouTrackClient
+    config: YouTrackConfig
+
+
 @asynccontextmanager
-async def lifespan(_server: FastMCP) -> AsyncIterator[dict[str, Any]]:
+async def lifespan(_server: MCPServer[AppState]) -> AsyncIterator[AppState]:
     """Manage server lifecycle and shared resources."""
     config = load_config()
     logger.info("YouTrack MCP Server starting, connecting to %s", config.url)
 
     async with YouTrackClient(config) as client:
-        yield {"client": client, "config": config}
+        yield AppState(client=client, config=config)
 
     logger.info("YouTrack MCP Server shutting down")
 
 
-# Initialize FastMCP server
-mcp = FastMCP(
+mcp = MCPServer(
     name="youtrack",
     lifespan=lifespan,
 )
@@ -111,6 +119,7 @@ def format_comment(comment: Any) -> dict[str, Any]:
 
 @mcp.tool()
 async def search_issues(
+    ctx: Context[AppState],
     project: str | None = None,
     assignee: str | None = None,
     state: str | None = None,
@@ -138,8 +147,7 @@ async def search_issues(
         - search_issues(domain="Security") - All Security domain issues
         - search_issues(query="#Unresolved") - All unresolved issues
     """
-    ctx = mcp.get_context()
-    client: YouTrackClient = ctx.request_context.lifespan_context["client"]
+    client = ctx.request_context.lifespan_context.client
 
     limit = min(max(1, limit), 100)  # Clamp between 1 and 100
 
@@ -192,7 +200,7 @@ async def search_issues(
 
 
 @mcp.tool()
-async def get_issue(issue_id: str) -> str:
+async def get_issue(ctx: Context[AppState], issue_id: str) -> str:
     """Get detailed information about a specific issue.
 
     Args:
@@ -201,8 +209,7 @@ async def get_issue(issue_id: str) -> str:
     Returns:
         JSON object with full issue details.
     """
-    ctx = mcp.get_context()
-    client: YouTrackClient = ctx.request_context.lifespan_context["client"]
+    client = ctx.request_context.lifespan_context.client
 
     try:
         issue = await client.get_issue(issue_id)
@@ -216,6 +223,7 @@ async def get_issue(issue_id: str) -> str:
 
 @mcp.tool()
 async def create_issue(
+    ctx: Context[AppState],
     summary: str,
     description: str | None = None,
     project: str | None = None,
@@ -232,9 +240,8 @@ async def create_issue(
     Returns:
         JSON object with the created issue details including the new issue ID.
     """
-    ctx = mcp.get_context()
-    client: YouTrackClient = ctx.request_context.lifespan_context["client"]
-    config = ctx.request_context.lifespan_context["config"]
+    client = ctx.request_context.lifespan_context.client
+    config = ctx.request_context.lifespan_context.config
 
     # Use default project if not specified
     target_project = project or config.default_project
@@ -274,6 +281,7 @@ async def create_issue(
 
 @mcp.tool()
 async def update_issue(
+    ctx: Context[AppState],
     issue_id: str,
     summary: str | None = None,
     description: str | None = None,
@@ -296,8 +304,7 @@ async def update_issue(
     Returns:
         JSON object with the updated issue details.
     """
-    ctx = mcp.get_context()
-    client: YouTrackClient = ctx.request_context.lifespan_context["client"]
+    client = ctx.request_context.lifespan_context.client
 
     try:
         # Handle state, assignee, domain, and type via commands
@@ -337,7 +344,7 @@ async def update_issue(
 
 
 @mcp.tool()
-async def delete_issue(issue_id: str) -> str:
+async def delete_issue(ctx: Context[AppState], issue_id: str) -> str:
     """Delete an issue from YouTrack.
 
     WARNING: This operation cannot be undone. The issue will be permanently deleted.
@@ -348,8 +355,7 @@ async def delete_issue(issue_id: str) -> str:
     Returns:
         JSON object confirming deletion or error message.
     """
-    ctx = mcp.get_context()
-    client: YouTrackClient = ctx.request_context.lifespan_context["client"]
+    client = ctx.request_context.lifespan_context.client
 
     try:
         # Get the issue first to confirm it exists and capture details
@@ -375,14 +381,13 @@ async def delete_issue(issue_id: str) -> str:
 
 
 @mcp.tool()
-async def list_projects() -> str:
+async def list_projects(ctx: Context[AppState]) -> str:
     """List all accessible YouTrack projects.
 
     Returns:
         JSON array of projects with id, shortName, name, and description.
     """
-    ctx = mcp.get_context()
-    client: YouTrackClient = ctx.request_context.lifespan_context["client"]
+    client = ctx.request_context.lifespan_context.client
 
     try:
         projects = await client.list_projects()
@@ -399,7 +404,7 @@ async def list_projects() -> str:
 
 
 @mcp.tool()
-async def get_project_fields(project: str) -> str:
+async def get_project_fields(ctx: Context[AppState], project: str) -> str:
     """Get custom fields configured for a YouTrack project.
 
     This is useful for understanding what fields are available when creating
@@ -411,8 +416,7 @@ async def get_project_fields(project: str) -> str:
     Returns:
         JSON array of custom field definitions with possible values.
     """
-    ctx = mcp.get_context()
-    client: YouTrackClient = ctx.request_context.lifespan_context["client"]
+    client = ctx.request_context.lifespan_context.client
 
     try:
         fields = await client.get_project_custom_fields(project)
@@ -457,7 +461,7 @@ async def get_project_fields(project: str) -> str:
 
 
 @mcp.tool()
-async def add_comment(issue_id: str, text: str) -> str:
+async def add_comment(ctx: Context[AppState], issue_id: str, text: str) -> str:
     """Add a comment to an issue.
 
     Args:
@@ -467,8 +471,7 @@ async def add_comment(issue_id: str, text: str) -> str:
     Returns:
         JSON object with the created comment details.
     """
-    ctx = mcp.get_context()
-    client: YouTrackClient = ctx.request_context.lifespan_context["client"]
+    client = ctx.request_context.lifespan_context.client
 
     try:
         comment = await client.add_comment(issue_id, text)
@@ -486,7 +489,7 @@ async def add_comment(issue_id: str, text: str) -> str:
 
 
 @mcp.tool()
-async def list_comments(issue_id: str) -> str:
+async def list_comments(ctx: Context[AppState], issue_id: str) -> str:
     """Get all comments on an issue.
 
     Args:
@@ -495,8 +498,7 @@ async def list_comments(issue_id: str) -> str:
     Returns:
         JSON array of comments with author, text, and timestamps.
     """
-    ctx = mcp.get_context()
-    client: YouTrackClient = ctx.request_context.lifespan_context["client"]
+    client = ctx.request_context.lifespan_context.client
 
     try:
         comments = await client.list_comments(issue_id)
@@ -516,7 +518,7 @@ async def list_comments(issue_id: str) -> str:
 
 
 @mcp.tool()
-async def delete_comment(issue_id: str, comment_id: str) -> str:
+async def delete_comment(ctx: Context[AppState], issue_id: str, comment_id: str) -> str:
     """Delete a comment from an issue.
 
     WARNING: This operation cannot be undone. The comment will be permanently deleted.
@@ -528,8 +530,7 @@ async def delete_comment(issue_id: str, comment_id: str) -> str:
     Returns:
         JSON object confirming deletion or error message.
     """
-    ctx = mcp.get_context()
-    client: YouTrackClient = ctx.request_context.lifespan_context["client"]
+    client = ctx.request_context.lifespan_context.client
 
     try:
         await client.delete_comment(issue_id, comment_id)
@@ -551,15 +552,14 @@ async def delete_comment(issue_id: str, comment_id: str) -> str:
 
 
 @mcp.tool()
-async def list_link_types() -> str:
+async def list_link_types(ctx: Context[AppState]) -> str:
     """Get available issue link types.
 
     Returns:
         JSON array of link types with their directional names.
         Common types: Depend (depends on/is required for), Duplicate, Relate, Subtask.
     """
-    ctx = mcp.get_context()
-    client: YouTrackClient = ctx.request_context.lifespan_context["client"]
+    client = ctx.request_context.lifespan_context.client
 
     try:
         link_types = await client.list_link_types()
@@ -584,7 +584,7 @@ async def list_link_types() -> str:
 
 
 @mcp.tool()
-async def list_issue_links(issue_id: str) -> str:
+async def list_issue_links(ctx: Context[AppState], issue_id: str) -> str:
     """Get all links for an issue.
 
     Args:
@@ -593,8 +593,7 @@ async def list_issue_links(issue_id: str) -> str:
     Returns:
         JSON object with linked issues grouped by link type and direction.
     """
-    ctx = mcp.get_context()
-    client: YouTrackClient = ctx.request_context.lifespan_context["client"]
+    client = ctx.request_context.lifespan_context.client
 
     try:
         links = await client.list_issue_links(issue_id)
@@ -635,6 +634,7 @@ async def list_issue_links(issue_id: str) -> str:
 
 @mcp.tool()
 async def add_issue_link(
+    ctx: Context[AppState],
     issue_id: str,
     target_issue_id: str,
     link_type: str = "Depend",
@@ -653,8 +653,7 @@ async def add_issue_link(
         - add_issue_link("OPS-123", "OPS-456", "Depend") - OPS-123 depends on OPS-456
         - add_issue_link("OPS-123", "OPS-42", "Duplicate") - OPS-123 duplicates OPS-42
     """
-    ctx = mcp.get_context()
-    client: YouTrackClient = ctx.request_context.lifespan_context["client"]
+    client = ctx.request_context.lifespan_context.client
 
     try:
         await client.add_issue_link(issue_id, target_issue_id, link_type)
@@ -675,6 +674,7 @@ async def add_issue_link(
 
 @mcp.tool()
 async def remove_issue_link(
+    ctx: Context[AppState],
     issue_id: str,
     target_issue_id: str,
     link_type: str = "Depend",
@@ -689,8 +689,7 @@ async def remove_issue_link(
     Returns:
         JSON object confirming the link was removed.
     """
-    ctx = mcp.get_context()
-    client: YouTrackClient = ctx.request_context.lifespan_context["client"]
+    client = ctx.request_context.lifespan_context.client
 
     try:
         await client.remove_issue_link(issue_id, target_issue_id, link_type)

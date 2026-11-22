@@ -27,6 +27,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
@@ -58,6 +59,7 @@ def load_mcp_config() -> None:
 
 
 from mcp_youtrack.server import (
+    AppState,
     add_comment,
     add_issue_link,
     create_issue,
@@ -69,7 +71,6 @@ from mcp_youtrack.server import (
     list_issue_links,
     list_link_types,
     list_projects,
-    mcp,
     remove_issue_link,
     search_issues,
     update_issue,
@@ -83,6 +84,7 @@ class ToolVerifier:
 
     def __init__(self, test_project: str) -> None:
         self.test_project = test_project
+        self.ctx: Any = None
         self.created_issues: list[str] = []
         self.results: dict[str, dict] = {}
 
@@ -95,7 +97,7 @@ class ToolVerifier:
     async def verify_list_projects(self) -> None:
         """Test list_projects tool."""
         try:
-            result = await list_projects()
+            result = await list_projects(self.ctx)
             data = json.loads(result)
             if "error" in data:
                 self.record("list_projects", False, data["error"])
@@ -109,7 +111,7 @@ class ToolVerifier:
     async def verify_get_project_fields(self) -> None:
         """Test get_project_fields tool."""
         try:
-            result = await get_project_fields(self.test_project)
+            result = await get_project_fields(self.ctx, self.test_project)
             data = json.loads(result)
             if "error" in data:
                 self.record("get_project_fields", False, data["error"])
@@ -124,7 +126,7 @@ class ToolVerifier:
         """Test search_issues tool with various filters."""
         try:
             # Basic search
-            result = await search_issues(project=self.test_project, limit=5)
+            result = await search_issues(self.ctx, project=self.test_project, limit=5)
             data = json.loads(result)
             if "error" in data:
                 self.record("search_issues", False, data["error"])
@@ -132,7 +134,7 @@ class ToolVerifier:
                 self.record("search_issues", True, f"Found {data['count']} issues")
 
             # Search with state filter
-            result = await search_issues(project=self.test_project, state="Open", limit=3)
+            result = await search_issues(self.ctx, project=self.test_project, state="Open", limit=3)
             data = json.loads(result)
             if "error" not in data:
                 self.record("search_issues (state)", True, "State filter works")
@@ -146,6 +148,7 @@ class ToolVerifier:
         """Test create_issue tool. Returns created issue ID."""
         try:
             result = await create_issue(
+                self.ctx,
                 project=self.test_project,
                 summary="[TEST] MCP Tool Verification - Delete Me",
                 description="This is a test issue created by verify_tools.py. Safe to delete.",
@@ -169,7 +172,7 @@ class ToolVerifier:
     async def verify_get_issue(self, issue_id: str) -> None:
         """Test get_issue tool."""
         try:
-            result = await get_issue(issue_id)
+            result = await get_issue(self.ctx, issue_id)
             data = json.loads(result)
             if "error" in data:
                 self.record("get_issue", False, data["error"])
@@ -184,6 +187,7 @@ class ToolVerifier:
         """Test update_issue tool."""
         try:
             result = await update_issue(
+                self.ctx,
                 issue_id=issue_id,
                 summary="[TEST] MCP Tool Verification - Updated",
             )
@@ -201,6 +205,7 @@ class ToolVerifier:
         """Test add_comment tool."""
         try:
             result = await add_comment(
+                self.ctx,
                 issue_id=issue_id,
                 text="Test comment from verify_tools.py",
             )
@@ -217,7 +222,7 @@ class ToolVerifier:
     async def verify_list_comments(self, issue_id: str) -> str | None:
         """Test list_comments tool. Returns comment ID if found."""
         try:
-            result = await list_comments(issue_id)
+            result = await list_comments(self.ctx, issue_id)
             data = json.loads(result)
             if "error" in data:
                 self.record("list_comments", False, data["error"])
@@ -238,7 +243,7 @@ class ToolVerifier:
     async def verify_delete_comment(self, issue_id: str, comment_id: str) -> None:
         """Test delete_comment tool."""
         try:
-            result = await delete_comment(issue_id, comment_id)
+            result = await delete_comment(self.ctx, issue_id, comment_id)
             data = json.loads(result)
             if "error" in data:
                 self.record("delete_comment", False, data["error"])
@@ -252,7 +257,7 @@ class ToolVerifier:
     async def verify_list_link_types(self) -> None:
         """Test list_link_types tool."""
         try:
-            result = await list_link_types()
+            result = await list_link_types(self.ctx)
             data = json.loads(result)
             if "error" in data:
                 self.record("list_link_types", False, data["error"])
@@ -267,7 +272,7 @@ class ToolVerifier:
         """Test add_issue_link, list_issue_links, remove_issue_link tools."""
         # Add link
         try:
-            result = await add_issue_link(issue_id1, issue_id2, "Relate")
+            result = await add_issue_link(self.ctx, issue_id1, issue_id2, "Relate")
             data = json.loads(result)
             if "error" in data:
                 self.record("add_issue_link", False, data["error"])
@@ -280,7 +285,7 @@ class ToolVerifier:
 
         # List links
         try:
-            result = await list_issue_links(issue_id1)
+            result = await list_issue_links(self.ctx, issue_id1)
             data = json.loads(result)
             if "error" in data:
                 self.record("list_issue_links", False, data["error"])
@@ -293,7 +298,7 @@ class ToolVerifier:
 
         # Remove link
         try:
-            result = await remove_issue_link(issue_id1, issue_id2, "Relate")
+            result = await remove_issue_link(self.ctx, issue_id1, issue_id2, "Relate")
             data = json.loads(result)
             if "error" in data:
                 self.record("remove_issue_link", False, data["error"])
@@ -307,7 +312,7 @@ class ToolVerifier:
     async def verify_delete_issue(self, issue_id: str) -> None:
         """Test delete_issue tool."""
         try:
-            result = await delete_issue(issue_id)
+            result = await delete_issue(self.ctx, issue_id)
             data = json.loads(result)
             if "error" in data:
                 self.record("delete_issue", False, data["error"])
@@ -340,43 +345,42 @@ class ToolVerifier:
         print(f"Test project: {self.test_project}\n")
 
         async with YouTrackClient(config) as client:
-            # Inject client into MCP context manually for testing
-            # We need to mock the context since we're not running through MCP
-            from unittest.mock import MagicMock, patch
+            # Tools take their context as an argument; outside a running MCP
+            # session, hand them a stand-in that carries the shared state.
+            from unittest.mock import MagicMock
 
-            mock_ctx = MagicMock()
-            mock_ctx.request_context.lifespan_context = {"client": client, "config": config}
+            self.ctx = MagicMock()
+            self.ctx.request_context.lifespan_context = AppState(client=client, config=config)
 
-            with patch.object(mcp, 'get_context', return_value=mock_ctx):
-                print("Testing read-only tools...")
-                await self.verify_list_projects()
-                await self.verify_get_project_fields()
-                await self.verify_search_issues()
-                await self.verify_list_link_types()
+            print("Testing read-only tools...")
+            await self.verify_list_projects()
+            await self.verify_get_project_fields()
+            await self.verify_search_issues()
+            await self.verify_list_link_types()
 
-                print("\nTesting write tools...")
-                issue1 = await self.verify_create_issue()
-                issue2 = await self.verify_create_issue()
+            print("\nTesting write tools...")
+            issue1 = await self.verify_create_issue()
+            issue2 = await self.verify_create_issue()
 
-                if issue1:
-                    await self.verify_get_issue(issue1)
-                    await self.verify_update_issue(issue1)
-                    await self.verify_add_comment(issue1)
-                    comment_id = await self.verify_list_comments(issue1)
-                    if comment_id:
-                        await self.verify_delete_comment(issue1, comment_id)
+            if issue1:
+                await self.verify_get_issue(issue1)
+                await self.verify_update_issue(issue1)
+                await self.verify_add_comment(issue1)
+                comment_id = await self.verify_list_comments(issue1)
+                if comment_id:
+                    await self.verify_delete_comment(issue1, comment_id)
 
-                if issue1 and issue2:
-                    await self.verify_issue_links(issue1, issue2)
+            if issue1 and issue2:
+                await self.verify_issue_links(issue1, issue2)
 
-                print("\nTesting delete...")
-                if issue1:
-                    await self.verify_delete_issue(issue1)
-                if issue2:
-                    await self.verify_delete_issue(issue2)
+            print("\nTesting delete...")
+            if issue1:
+                await self.verify_delete_issue(issue1)
+            if issue2:
+                await self.verify_delete_issue(issue2)
 
-                print("\nCleaning up...")
-                await self.cleanup(client)
+            print("\nCleaning up...")
+            await self.cleanup(client)
 
         # Summary
         print("\n" + "=" * 60)

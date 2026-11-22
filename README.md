@@ -64,7 +64,13 @@ python -m mcp_youtrack
 ### Register with Claude Code
 
 ```bash
-# Using uvx (recommended for portable installation)
+# Using uvx straight from GitHub (no clone needed; add --refresh once to pick up a new main)
+claude mcp add youtrack --scope user \
+  -e YOUTRACK_URL=https://youtrack.example.com \
+  -e YOUTRACK_TOKEN=perm:your-token \
+  -- uvx --from git+https://github.com/dsswift/mcp-youtrack.git mcp-youtrack
+
+# Using uvx from a local clone
 claude mcp add youtrack --scope user \
   -e YOUTRACK_URL=https://youtrack.example.com \
   -e YOUTRACK_TOKEN=perm:your-token \
@@ -232,7 +238,7 @@ mcp-youtrack/
 │   ├── config.py        # Configuration management
 │   ├── models.py        # Pydantic data models
 │   ├── client.py        # YouTrack API client
-│   └── server.py        # FastMCP server implementation
+│   └── server.py        # MCP server and its tools
 ├── tests/               # Unit tests
 ├── scripts/             # Utility scripts
 │   ├── verify_tools.py  # Integration test script
