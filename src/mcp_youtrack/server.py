@@ -131,7 +131,7 @@ async def search_issues(
 
     Args:
         project: Project short name to filter by (e.g., 'OPS').
-        assignee: Filter by assignee username (e.g., 'jsmith', 'tbellerive').
+        assignee: Filter by assignee username (e.g., 'jsmith', 'ada').
         state: Filter by state name (e.g., 'In Progress', 'Open', 'Done').
         domain: Filter by domain (e.g., 'Administrative', 'Security', 'Microsoft 365').
         query: Additional YouTrack search query (e.g., '#Unresolved', 'created: today').
@@ -142,7 +142,7 @@ async def search_issues(
 
     Examples:
         - search_issues(project="OPS") - All issues in OPS project
-        - search_issues(assignee="tbellerive", state="In Progress") - User's in-progress tasks
+        - search_issues(assignee="ada", state="In Progress") - User's in-progress tasks
         - search_issues(project="HD", state="New") - New issues in HD project
         - search_issues(domain="Security") - All Security domain issues
         - search_issues(query="#Unresolved") - All unresolved issues
